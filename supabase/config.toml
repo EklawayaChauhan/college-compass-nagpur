@@ -1,0 +1,4 @@
+project_id = "ckqpatbmoruihmgymovt"
+
+[functions.college-chat]
+verify_jwt = false
