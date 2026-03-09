@@ -1,23 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
-import { CollegeSelector } from "@/components/CollegeSelector";
-import { CollegeInfoCard } from "@/components/CollegeInfoCard";
 import { ChatMessage, Message } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { VoiceOrb } from "@/components/VoiceOrb";
 import { useSpeechRecognition, useTTS } from "@/hooks/use-speech";
-import { fetchCollegeInfo, streamChat } from "@/lib/chat-api";
-import { CollegeInfo } from "@/lib/colleges";
+import { streamChat } from "@/lib/chat-api";
 import { toast } from "sonner";
-import { GraduationCap, MessageSquare } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 import { motion } from "framer-motion";
 
 const Index = () => {
-  const [selectedCollege, setSelectedCollege] = useState<string | null>(null);
-  const [collegeInfo, setCollegeInfo] = useState<CollegeInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingInfo, setLoadingInfo] = useState(false);
   const [voiceState, setVoiceState] = useState<"listening" | "processing" | "speaking" | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -26,7 +20,7 @@ const Index = () => {
   const handleVoiceResult = useCallback((text: string) => {
     setVoiceState("processing");
     handleSend(text);
-  }, []);
+  }, [messages]);
 
   const { isListening, toggle: toggleMic } = useSpeechRecognition(handleVoiceResult);
 
@@ -44,28 +38,7 @@ const Index = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const handleCollegeSelect = async (college: string) => {
-    setSelectedCollege(college);
-    setMessages([]);
-    setCollegeInfo(null);
-    setLoadingInfo(true);
-    try {
-      const info = await fetchCollegeInfo(college);
-      setCollegeInfo(info);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to load college info");
-    } finally {
-      setLoadingInfo(false);
-    }
-  };
-
   const handleSend = async (input: string) => {
-    if (!selectedCollege) {
-      toast.error("Please select a college first");
-      return;
-    }
-
     const userMsg: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
@@ -85,12 +58,10 @@ const Index = () => {
     try {
       await streamChat({
         messages: [...messages, userMsg],
-        college: selectedCollege,
         onDelta: upsertAssistant,
         onDone: () => {
           setIsLoading(false);
           if (voiceState === "processing") {
-            // Auto-speak the response
             setTimeout(() => speak(assistantSoFar), 200);
           }
         },
@@ -125,20 +96,8 @@ const Index = () => {
     <div className="flex flex-col h-screen bg-background">
       <Header />
 
-      <CollegeSelector selected={selectedCollege} onSelect={handleCollegeSelect} />
-
-      {loadingInfo && (
-        <div className="mx-4 rounded-xl border border-border bg-card p-4 animate-pulse">
-          <div className="h-4 bg-muted rounded w-1/2 mb-2" />
-          <div className="h-3 bg-muted rounded w-3/4" />
-        </div>
-      )}
-
-      {collegeInfo && <CollegeInfoCard info={collegeInfo} />}
-
-      {/* Chat area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
-        {!selectedCollege && (
+        {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -151,21 +110,19 @@ const Index = () => {
               Welcome to CollegeAI Nagpur
             </h2>
             <p className="text-sm text-muted-foreground max-w-sm">
-              Select a college from the dropdown above to start asking questions about placements, fees, hostel, campus life and more!
+              Ask me anything about Nagpur colleges — placements, fees, hostel, campus life, rankings and more!
             </p>
-          </motion.div>
-        )}
-
-        {selectedCollege && messages.length === 0 && !loadingInfo && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center h-32 text-center px-6 gap-2"
-          >
-            <MessageSquare className="h-6 w-6 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Ask anything about {selectedCollege.split(" - ")[0]}!
-            </p>
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
+              {["VNIT placements?", "RCOEM fees?", "Best engineering college?", "GMC Nagpur hostel?"].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => handleSend(q)}
+                  className="rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </motion.div>
         )}
 
@@ -190,8 +147,8 @@ const Index = () => {
         onSend={handleSend}
         onMicClick={handleMicClick}
         isListening={isListening}
-        disabled={isLoading || !selectedCollege}
-        placeholder={selectedCollege ? `Ask about ${selectedCollege.split(" - ")[0]}...` : "Select a college first..."}
+        disabled={isLoading}
+        placeholder="Ask about any Nagpur college..."
       />
 
       <VoiceOrb state={voiceState} onClose={handleCloseOrb} />

@@ -1,33 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Message } from "@/components/ChatMessage";
-import type { CollegeInfo } from "@/lib/colleges";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/college-chat`;
 
-export async function fetchCollegeInfo(college: string): Promise<CollegeInfo> {
-  const { data, error } = await supabase.functions.invoke("college-chat", {
-    body: { action: "info", college },
-  });
-
-  if (error) throw error;
-
-  return {
-    name: college.split(" - ")[0] || college,
-    type: data.type || "Unknown",
-    ranking: data.ranking || "N/A",
-    knownFor: data.knownFor || "Education",
-    snippet: data.snippet || "",
-  };
-}
-
 export async function streamChat({
   messages,
-  college,
   onDelta,
   onDone,
 }: {
   messages: Message[];
-  college: string;
   onDelta: (text: string) => void;
   onDone: () => void;
 }) {
@@ -37,7 +18,7 @@ export async function streamChat({
       "Content-Type": "application/json",
       Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ messages, college }),
+    body: JSON.stringify({ messages }),
   });
 
   if (!resp.ok || !resp.body) {
@@ -66,10 +47,7 @@ export async function streamChat({
       if (!line.startsWith("data: ")) continue;
 
       const jsonStr = line.slice(6).trim();
-      if (jsonStr === "[DONE]") {
-        streamDone = true;
-        break;
-      }
+      if (jsonStr === "[DONE]") { streamDone = true; break; }
 
       try {
         const parsed = JSON.parse(jsonStr);
@@ -82,7 +60,6 @@ export async function streamChat({
     }
   }
 
-  // Final flush
   if (textBuffer.trim()) {
     for (let raw of textBuffer.split("\n")) {
       if (!raw) continue;
